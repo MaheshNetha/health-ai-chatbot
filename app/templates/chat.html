@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot</title>
+    <script src="../js/index.js" type="application/javascript" ></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        #chat-container {
+            width: 800px;
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        #chat-box {
+            height: 300px;
+            overflow-y: scroll;
+            padding: 10px;
+        }
+        #user-input {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border-top: 1px solid #ccc;
+        }
+        .warning{
+            color: red;
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+
+<div id="chat-container">
+    <div id="chat-box"></div>
+    <input type="text" id="user-input" name="initiate" placeholder="Enter Your Name.." />
+    <span id="error"></span>
+</div>
+
+<script>
+    const chatBox = document.getElementById('chat-box');
+    const userInput = document.getElementById('user-input');
+    let noOfDays = 1;
+    let arrList = ["joint_pain","knee_pain"];
+    const chatSteps =[{
+        id: 1,
+        name: 'initiate',
+        placeholder:'Enter Your Name..'
+    },
+        {
+            id:2,
+            name:'symptom',
+            placeholder:'Enter the symptom you are experiencing'
+
+        },
+        {
+            id:3,
+            name: 'select_main_symptom',
+            placeholder: 'Select the one you meant (0 - 1):'
+        },
+        {
+            id:4,
+            name:'select_days',
+            placeholder: 'Okay. From how many days ?'
+        },
+        {
+            id:5,
+            name:'select_other_symptoms',
+            placeholder: 'Okay. Select , separated '
+        }
+    ]
+
+    userInput.addEventListener('keyup', async  function(event) {
+        if (event.key === 'Enter') {
+            const userMessage = userInput.value.trim();
+            let nameAttr = userInput.getAttribute("name");
+            if(userMessage=='' || !userMessage){
+                printError('Please Enter Valid Input..')
+                return;
+            }
+            removeError();
+
+            if(nameAttr=='initiate' && userMessage!==''){
+
+                const botResponse = 'Hello! '+userMessage+' I am a simple chatbot.';
+                const payload = {
+                    type:"clientName",
+                    value:userMessage,
+
+                }
+                sendMessage('You',userMessage);
+                sendMessage('Chatbot',botResponse);
+                 userInput.value = '';
+                 userInput.placeholder = chatSteps[1].placeholder;
+                 userInput.name = chatSteps[1].name;
+                const r= fetchData(payload);
+
+            }
+            else if(nameAttr=='symptom' && userMessage!==''){
+
+
+
+                 const payload = {
+                    type:"clientSymptom",
+                    value:userMessage,
+
+                }
+                const res =await fetchData(payload);
+                 if(res?.data){
+                     arrList = res.data?.length >0 ? res.data[1]?.length ? res.data[1] :[]:[];
+                }
+                console.log("2",res);
+                const botResponse = 'Your Symptom: '+userMessage+' , Please select the one :';
+                sendMessage('You',userMessage);
+                sendMessage('Chatbot',botResponse);
+                 userInput.value = '';
+                 userInput.placeholder = chatSteps[2].placeholder;
+                 userInput.name = chatSteps[2].name;
+
+
+
+            }
+            else if(nameAttr=='select_main_symptom' && userMessage!==''){
+
+
+
+                const botResponse = 'Your Main Symptom: '+userMessage+' ,Since, How Many days you are experiencing? :';
+                sendMessage('You',userMessage);
+                sendMessage('Chatbot',botResponse);
+                 userInput.value = '';
+                 userInput.placeholder = chatSteps[3].placeholder;
+                 userInput.name = chatSteps[3].name;
+
+            }
+            else if(nameAttr=='select_days' && userMessage!==''){
+                 noOfDays = parseInt(userMessage);
+                let botResponse="";
+                let AllSymptomslist = arrList.map((i,index)=>
+                {
+                    if(index<arrList.length) {
+                        botResponse+= '<br>'+index+')'+i+','
+                    }
+                });
+                botResponse +=" : Select items number seperated by ,"
+
+                sendMessage('You',userMessage);
+                sendMessage('Chatbot',botResponse);
+
+                 userInput.value = '';
+                 userInput.placeholder = chatSteps[4].placeholder;
+                 userInput.name = chatSteps[4].name;
+
+            }
+            else if(nameAttr=='select_other_symptoms' && userMessage!==''){
+
+                // yes ans symptoms
+                // no of days
+                let s= userMessage.split(',').map(e=> parseInt(e));
+                console.log("s",s);
+
+                let finalList= arrList.filter((_, index) => s.includes(index));
+                console.log("finalList",finalList);
+
+                  const payload = {
+                    type:"clientSymptomDetail",
+                    symptomArr:finalList,
+                     noOfDays:noOfDays,
+
+                }
+                const res =await fetchData(payload);
+                console.log("3final",res);
+
+
+
+                const botResponse = 'Fetching Details...!';
+                sendMessage('You',userMessage);
+                sendMessage('Chatbot',botResponse);
+                //sendMessage('Chatbot')
+                if(res?.data){
+                     sendMessage('Chatbot',res.data.description);
+                     let precautions="Take following measures : "
+                      let gg = res.data.precution_list.map((i,ind)=> {
+                          if(ind<res.data.precution_list?.length)
+                              precautions+= '<br>'+ind+')'+i
+                      });
+                     sendMessage(precautions)
+
+                }
+                 userInput.value = '';
+                 userInput.placeholder = chatSteps[0].placeholder;
+                 userInput.name = chatSteps[0].name;
+
+            }
+
+
+            //validateInput();
+            //sendMessage();
+        }
+    });
+
+    function sendMessage(user,message) {
+        //const userMessage = userInput.value.trim();
+        if (message !== '') {
+            appendMessage(user, message);
+            // Add your chatbot logic here to generate a response
+           // const botResponse = 'Hello! '+userMessage+' I am a simple chatbot.';
+           // appendMessage('Chatbot', botResponse);
+
+        }
+    }
+
+    function appendMessage(sender, message) {
+        const messageElement = document.createElement('div');
+        messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+        chatBox.appendChild(messageElement);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function printError(error){
+        const el = document.createElement('p');
+        el.innerHTML=`<strong class="warning">${error}</strong>`;
+        document.getElementById("error").appendChild(el);
+    }
+    function removeError(){
+         document.getElementById("error").innerHTML=''
+    }
+    function validateInput(){
+        if(!userInput.value.trim()){
+            printError("Enter Valid Input");
+        }
+        else{
+            printError("")
+        }
+
+    }
+    async function fetchData(payload){
+        const url = 'http://127.0.0.1:5000';
+         const requestOptions = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    };
+    const response = await fetch(url+'/client', requestOptions);
+    const data = await response.json();
+    console.log("data:",data);
+    return data;
+    }
+
+</script>
+
+</body>
+</html>
